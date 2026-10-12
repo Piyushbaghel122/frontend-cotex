@@ -1,4 +1,4 @@
-import { Code2, FileText, Globe, ImageIcon, MessageSquare, Mic, MicOff, Paperclip, Presentation, Send, X, Zap } from 'lucide-react'
+import { Code2, FileText, Film, Globe, ImageIcon, MessageSquare, Mic, MicOff, Paperclip, Presentation, Send, Sparkles, X, Zap } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import sendMessage from '../features/sendMessage'
 import { useDispatch, useSelector } from 'react-redux'
@@ -11,7 +11,7 @@ import { useRef } from 'react'
 
 function ChatInput() {
   const [value, setValue] = useState("")
-  const [selectedAgent, setSelectedAgent] = useState("Auto")
+  const [selectedAgent, setSelectedAgent] = useState("Chat")
   const { selectedConversation } = useSelector(state => state.conversation)
   const { messages, isLoading } = useSelector(state => state.message)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -19,7 +19,6 @@ function ChatInput() {
   const recognitionRef = useRef(null)
   const fileRef = useRef(null)
   const dispatch = useDispatch()
-
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -32,9 +31,7 @@ function ChatInput() {
 
     recognition.onresult = (event) => {
       let transcript = ""
-
       for (let index = event.resultIndex; index < event.results.length; index++) {
-
         transcript += event.results[index][0].transcript
       }
       setValue(transcript)
@@ -49,7 +46,8 @@ function ChatInput() {
 
   const toggleMic = () => {
     if (!recognitionRef.current) {
-      alert("speech recognition not supported")
+      alert("Speech recognition not supported")
+      return;
     }
     if (listening) {
       recognitionRef.current.stop()
@@ -58,98 +56,114 @@ function ChatInput() {
       recognitionRef.current.start()
       setListening(true)
     }
-
   }
 
-
-
-
-
-
-
-
   const handleSendMessage = async () => {
-    dispatch(setIsLoading(true))
-    let conversation = selectedConversation
-    if (!conversation) {
-      dispatch(setMessages([]))
-      const conv = await createConversation()
-      dispatch(setSelectedConversation(conv))
-
-      dispatch(addConversation(conv))
-      conversation = conv
-    }
-
-    if (conversation.title == "New Chat") {
-      await updateConversation({ id: conversation?._id, title: value.trim() })
-      dispatch(setConvTitle({ conversationId: conversation?._id, title: value.slice(0, 40) }))
-    }
-
-
-    console.log(selectedFile)
-    const formData = new FormData()
-    formData.append("prompt", value.trim())
-    formData.append("conversationId", conversation?._id)
-    formData.append("agent", selectedAgent.toLowerCase())
-    if (selectedFile) {
-      formData.append("file", selectedFile)
-    }
-
-
-
-    dispatch(addMessage({ role: "user", content: value.trim() }))
+    if (!value.trim() && !selectedFile) return
+    const userPrompt = value.trim()
     setValue("")
-    const data = await sendMessage(formData)
-    dispatch(setIsLoading(false))
-    setSelectedFile(null)
-    dispatch(setArtifacts(data.artifacts || []))
-    dispatch(addMessage({ role: "assistant", content: data?.answer, images: data?.images }))
-    console.log(data)
+    dispatch(setIsLoading(true))
+
+    try {
+      let conversation = selectedConversation
+      if (!conversation || !conversation._id) {
+        const conv = await createConversation()
+        if (conv && conv._id) {
+          conversation = conv
+          dispatch(setSelectedConversation(conv))
+          dispatch(addConversation(conv))
+        }
+      }
+
+      if (conversation?.title === "New Chat" && userPrompt) {
+        const newTitle = userPrompt.slice(0, 30);
+        updateConversation({ id: conversation._id, title: newTitle });
+        dispatch(setConvTitle({ conversationId: conversation._id, title: newTitle }));
+        conversation = { ...conversation, title: newTitle };
+        dispatch(setSelectedConversation(conversation));
+      }
+
+      const formData = new FormData()
+      formData.append("prompt", userPrompt)
+      if (conversation?._id) {
+        formData.append("conversationId", conversation._id)
+      }
+      formData.append("agent", selectedAgent.toLowerCase())
+      if (selectedFile) {
+        formData.append("file", selectedFile)
+      }
+
+      dispatch(addMessage({ role: "user", content: userPrompt }))
+      const data = await sendMessage(formData)
+
+      if (data) {
+        if (data.artifacts && data.artifacts.length > 0) {
+          dispatch(setArtifacts(data.artifacts))
+        }
+        dispatch(addMessage({
+          role: "assistant",
+          content: data.answer || "Request processed.",
+          images: data.images || []
+        }))
+      } else {
+        dispatch(addMessage({
+          role: "assistant",
+          content: "Sorry, I could not process your request at this moment. Please try again."
+        }))
+      }
+    } catch (err) {
+      console.error("Failed to send message:", err)
+      dispatch(addMessage({
+        role: "assistant",
+        content: "Error communicating with agent. Please try again."
+      }))
+    } finally {
+      dispatch(setIsLoading(false))
+      setSelectedFile(null)
+    }
   }
 
   const agents = [
-    {
-      id: "auto",
-      icon: Zap,
-      label: "Auto"
-    },
-
     {
       id: "chat",
       icon: MessageSquare,
       label: "Chat"
     },
-
     {
       id: "coding",
       icon: Code2,
       label: "Coding"
     },
-
+    {
+      id: "image",
+      icon: ImageIcon,
+      label: "Image"
+    },
+    {
+      id: "video",
+      icon: Film,
+      label: "Video"
+    },
     {
       id: "pdf",
       icon: FileText,
       label: "PDF"
     },
-
     {
       id: "ppt",
       icon: Presentation,
       label: "PPT"
     },
-
     {
       id: "vision",
-      icon: ImageIcon,
+      icon: Sparkles,
       label: "Vision"
     },
-
     {
       id: "search",
       icon: Globe,
       label: "Search"
     }
-
   ]
 
   return (
@@ -230,6 +244,12 @@ function ChatInput() {
         <textarea
           placeholder='Ask Anything...'
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
           value={value}
           className="w-full bg-transparent outline-none resize-none text-[14px] text-slate-200 placeholder:text-slate-600 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden disabled:opacity-50"
           rows={3}

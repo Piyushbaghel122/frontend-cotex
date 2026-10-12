@@ -1,11 +1,8 @@
-import { signInWithPopup } from 'firebase/auth'
-import React, { useEffect } from 'react'
-import { auth, googleProvider } from '../utils/firebase'
-import api from '../utils/axios'
-import Home from './pages/Home'
-import getCurrentUser from './features/getCurrentUser'
-import { useDispatch } from 'react-redux'
-import { setUserdata } from './redux/userSlice'
+import React, { useEffect } from 'react';
+import Home from './pages/Home';
+import getCurrentUser from './features/getCurrentUser';
+import { useDispatch } from 'react-redux';
+import { setUserdata } from './redux/userSlice';
 
 function App() {
 
